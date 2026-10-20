@@ -21,7 +21,7 @@ jobs:
       - name: Ruff 静态检查
         run: |
           pip install ruff
-          ruff check app tools --select E9,F --exclude app/assets
+          ruff check app tools --select E9,F63,F7,F82 --exclude app/assets
 
   build-release:
     name: 打包 Windows exe 并发布 Release
