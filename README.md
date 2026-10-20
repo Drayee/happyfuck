@@ -31,7 +31,7 @@ python -m PyInstaller --noconfirm --clean happyfuck.spec
 ## CI
 
 - 每次 push / PR：`compileall` + Ruff（E9,F）语法与导入检查。
-- 打 `v*` tag：Windows runner 自动 PyInstaller 打包，压缩为 `HappyFuck-<tag>-windows-x64.zip`，并创建 GitHub Release。
+- 打 `v*` tag：Windows runner 自动 PyInstaller 打包，产出 `HappyFuck-<tag>-windows-x64.exe`，并创建 GitHub Release。
 
 ```bash
 git tag v1.0.0 && git push origin v1.0.0

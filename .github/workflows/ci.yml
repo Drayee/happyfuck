@@ -49,12 +49,12 @@ jobs:
           python -m PyInstaller --noconfirm --clean happyfuck.spec
           if (-not (Test-Path dist/HappyFuck.exe)) { Write-Error "HappyFuck.exe 未生成"; exit 1 }
 
-      - name: 压缩产物
+      - name: 准备产物
         shell: pwsh
         run: |
           $ver = "${{ github.ref_name }}"
-          Compress-Archive -Path dist/HappyFuck.exe -DestinationPath "HappyFuck-$ver-windows-x64.zip" -Force
-          Get-Item "HappyFuck-$ver-windows-x64.zip" | Select-Object Name, Length
+          Copy-Item dist/HappyFuck.exe "HappyFuck-$ver-windows-x64.exe"
+          Get-Item "HappyFuck-$ver-windows-x64.exe" | Select-Object Name, Length
 
       - name: 创建 Release 并上传
         uses: softprops/action-gh-release@v2
@@ -64,4 +64,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: HappyFuck-${{ github.ref_name }}-windows-x64.zip
+          files: HappyFuck-${{ github.ref_name }}-windows-x64.exe
