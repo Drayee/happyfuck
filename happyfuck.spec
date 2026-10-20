@@ -1,9 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller 打包配置：python -m PyInstaller happyfuck.spec
+# PyInstaller 6.x 打包配置：python -m PyInstaller --noconfirm --clean happyfuck.spec
 import os
 
-block_cipher = None
-ROOT = os.path.abspath(SPEC)
+ROOT = os.path.dirname(os.path.abspath(SPEC))
 APP = os.path.join(ROOT, 'app')
 TOOLS = os.path.join(ROOT, 'tools')
 
@@ -15,15 +14,18 @@ a = Analysis(
         (os.path.join(APP, 'assets'), 'assets'),
     ],
     hiddenimports=[
+        # tools/ 下是运行时动态 sys.path 导入的，显式声明保证收进 bundle
         'coord', 'run_sim', 'rules', 'legym_envelope', 'b_login_upload',
         'paths',
     ],
-    hookconfigfiles=[],
-    cipher=block_cipher,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -34,8 +36,13 @@ exe = EXE(
     [],
     name='HappyFuck',
     debug=False,
+    bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     console=False,
-    icon=None,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
 )
