@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 打包产物
+build/
+dist/
+*.spec.bak
+
+# 运行时数据（账号、token、轨迹，绝不提交）
+app/data/
+data/
+*.log
+session.json
+config.json
+rules.json
+tracks.json
+hs_table.json
+vo_*.json
+
+# 虚拟环境
+venv/
+.venv/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak

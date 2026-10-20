@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>HappyFuck Map</title>
+<link rel="stylesheet" href="vendor/leaflet.css"/>
+<script src="vendor/leaflet.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<style>
+  html,body,#map{height:100%;margin:0;padding:0;background:#111;}
+  .leaflet-container{background:#1a1a1a;}
+  .wp-label{background:#4ea1ff;color:#fff;border:2px solid #fff;border-radius:50%;
+            width:22px;height:22px;line-height:20px;text-align:center;
+            font-size:11px;font-weight:bold;box-shadow:0 0 6px #4ea1ff;}
+  .sign-label{background:#ff6b6b;color:#fff;border:2px solid #fff;border-radius:50%;
+              width:24px;height:24px;line-height:20px;text-align:center;
+              font-size:11px;font-weight:bold;box-shadow:0 0 8px #ff6b6b;}
+  .me-label{background:#3ddc84;border:3px solid #fff;border-radius:50%;
+            width:16px;height:16px;box-shadow:0 0 12px #3ddc84;}
+  #hud{position:absolute;left:10px;bottom:10px;z-index:999;
+       background:rgba(0,0,0,.8);color:#9fe;padding:6px 12px;
+       border-radius:6px;font:12px/1.6 Consolas,monospace;pointer-events:none;}
+  #coord{position:absolute;right:10px;bottom:10px;z-index:999;
+       background:rgba(0,0,0,.8);color:#7bb8ff;padding:6px 12px;
+       border-radius:6px;font:12px Consolas,monospace;pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hud">初始化…</div>
+<div id="coord">--</div>
+<script>
+var bridge = null;
+var map = L.map('map', {zoomControl:true, attributionControl:false})
+           .setView([39.9042, 116.4074], 17);
+
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile'
+  + '?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scale=1&style=8',
+  {subdomains:'1234', maxZoom:19, minZoom:3}).addTo(map);
+
+var satLayer = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile'
+  + '?style=6&x={x}&y={y}&z={z}', {subdomains:'1234', maxZoom:19});
+
+var pathLayer  = L.layerGroup().addTo(map);
+var signLayer  = L.layerGroup().addTo(map);
+var fenceLayer = L.layerGroup().addTo(map);
+var runLayer   = L.layerGroup().addTo(map);
+var meLayer    = L.layerGroup().addTo(map);
+
+var waypoints = [], closed = false, satOn = false;
+
+function hud(t){ document.getElementById('hud').textContent = t; }
+
+function haversine(la1,lo1,la2,lo2){
+  var R=6371000,p1=la1*Math.PI/180,p2=la2*Math.PI/180;
+  var dp=p2-p1,dl=(lo2-lo1)*Math.PI/180;
+  var a=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+function pathLength(){
+  var len=0,n=waypoints.length;
+  if(n<2) return 0;
+  for(var i=0;i<n;i++){
+    if(i===n-1 && !closed) break;
+    var a=waypoints[i], b=waypoints[(i+1)%n];
+    len += haversine(a[0],a[1],b[0],b[1]);
+  }
+  return len;
+}
+
+function drawPath(){
+  pathLayer.clearLayers();
+  if(waypoints.length>=2) L.polyline(waypoints,{color:'#4ea1ff',weight:3}).addTo(pathLayer);
+  if(closed && waypoints.length>=3) L.polygon(waypoints,{color:'#4ea1ff',weight:3,fill:false}).addTo(pathLayer);
+  waypoints.forEach(function(p,i){
+    var m = L.marker(p,{icon:L.divIcon({className:'wp-label',html:String(i),iconSize:[22,22]}),draggable:true});
+    m.addTo(pathLayer);
+    m.on('dragend',function(e){
+      var ll=e.target.getLatLng();
+      waypoints[i]=[ll.lat,ll.lng];
+      drawPath();
+    });
+    m.on('contextmenu',function(e){
+      L.DomEvent.stopPropagation(e);
+      if(bridge) bridge.onDeleteRequest(i);
+    });
+  });
+  if(bridge) bridge.onPathChanged(JSON.stringify(waypoints), pathLength(), closed);
+}
+
+map.on('click', function(e){
+  if(!bridge) return;
+  bridge.onMapClick(e.latlng.lat, e.latlng.lng);
+});
+map.on('mousemove', function(e){
+  document.getElementById('coord').textContent =
+    e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6)+'  z'+map.getZoom();
+});
+
+function setSignPoints(json){
+  signLayer.clearLayers();
+  var pts=JSON.parse(json||'[]');
+  pts.forEach(function(p,i){
+    L.marker([p[0],p[1]],{icon:L.divIcon({className:'sign-label',html:'S'+i,iconSize:[24,24]})})
+     .addTo(signLayer)
+     .bindTooltip('打卡点 '+(i+1), {permanent:false});
+  });
+  return pts.length;
+}
+
+function setFences(json){
+  fenceLayer.clearLayers();
+  var polys=JSON.parse(json||'[]');
+  var n=0;
+  polys.forEach(function(poly){
+    if(!poly||poly.length<3) return;
+    L.polygon(poly,{color:'#ff6b6b',weight:2,fillColor:'#ff6b6b',fillOpacity:0.10,dashArray:'8 5'})
+     .addTo(fenceLayer).bindTooltip('学校规定范围');
+    n++;
+  });
+  return n;
+}
+
+function setRunTrack(json){
+  runLayer.clearLayers();
+  var pts=JSON.parse(json||'[]');
+  if(pts.length>1) L.polyline(pts,{color:'#3ddc84',weight:2,opacity:0.85}).addTo(runLayer);
+  return pts.length;
+}
+
+function setPosition(lat,lon,text){
+  meLayer.clearLayers();
+  if(lat===null||lat===undefined) return;
+  L.marker([lat,lon],{icon:L.divIcon({className:'me-label',html:'',iconSize:[22,22]})})
+   .addTo(meLayer).bindTooltip(text||'当前位置',{permanent:true,direction:'top',offset:[0,-12]});
+}
+
+var API = {
+  addPoint: function(la,lo){ waypoints.push([la,lo]); drawPath(); },
+  setPoints: function(json){ waypoints=JSON.parse(json||'[]'); drawPath(); },
+  clearPoints: function(){ waypoints=[]; closed=false; drawPath(); },
+  setClosed: function(v){ closed=!!v; drawPath(); },
+  deletePoint: function(i){ if(i>=0&&i<waypoints.length){ waypoints.splice(i,1); drawPath(); } },
+  goto: function(la,lo,z){ map.setView([la,lo], z||map.getZoom()); },
+  setSat: function(on){
+    if(on && !satOn){ map.addLayer(satLayer); satOn=true; }
+    else if(!on && satOn){ map.removeLayer(satLayer); satOn=false; }
+  },
+  getCenter: function(){ var c=map.getCenter(); return JSON.stringify([c.lat,c.lng,map.getZoom()]); },
+  invalidate: function(){ map.invalidateSize(); }
+};
+
+new QWebChannel(qt.webChannelTransport, function(ch){
+  bridge = ch.objects.bridge;
+  hud('地图就绪 · 左键加点 · 右键删点');
+  if(bridge.onReady) bridge.onReady();
+});
+</script>
+</body>
+</html>
