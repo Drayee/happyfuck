@@ -8,10 +8,22 @@
 import sys, os, json, math
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# 兼容两种布局：单仓(同目录) / 多仓(../tools)
-for _p in (_HERE, os.path.join(os.path.dirname(_HERE), 'tools')):
-    if os.path.isdir(_p) and _p not in sys.path:
-        sys.path.insert(0, _p)
+# 兼容两种布局：
+#   单仓 —— rules/run_sim 与本源文件同目录
+#   多仓 —— 源文件在 android/tools/，依赖在仓库根的 tools/
+# 做法：向上找至多 3 层里第一个真正含 run_sim.py 的 tools 目录
+_cands = [_HERE]
+_p = _HERE
+for _ in range(3):
+    _nxt = os.path.dirname(_p)
+    if not _nxt or _nxt == _p:
+        break
+    _cands.append(os.path.join(_nxt, 'tools'))
+    _p = _nxt
+for _c in _cands:
+    if os.path.isfile(os.path.join(_c, 'run_sim.py')) and _c not in sys.path:
+        sys.path.insert(0, _c)
+        break
 
 import run_sim as RUNSIM
 import rules as RULES
