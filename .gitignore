@@ -30,3 +30,11 @@ venv/
 Thumbs.db
 *.tmp
 *.bak
+
+# 安卓构建产物
+android/apktool_out/
+android/mobile/dist/
+android/mobile/build/
+android/mobile/__pycache__/
+android/apktool.yml
+android/build/

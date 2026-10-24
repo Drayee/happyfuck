@@ -1,0 +1,123 @@
+{
+  "semesterId": "8a97807d919d4e770191a1ecdba9013b",
+  "rule": {
+    "hasRule": true,
+    "limitationsGoalsSexInfoId": "402888da7c3a16bb017c3a1765b205c2",
+    "scoringType": 1,
+    "totalWeekMileage": "0.00",
+    "totalWeekPart": 0,
+    "totalDayMileage": "0.00",
+    "totalDayPart": 0,
+    "averageSpeedStart": "180000",
+    "averageSpeedEnd": "540000",
+    "averageCadenceStart": 0,
+    "averageCadenceEnd": 300,
+    "effectiveMileageStart": 1.0,
+    "effectiveMileageEnd": 5.0,
+    "dailyMileage": 5.0,
+    "weeklyMileage": 35.0,
+    "semesterMileage": 100.0,
+    "effectiveParagraphMileage": null,
+    "effectiveParagraphStart": null,
+    "effectiveParagraphEnd": null,
+    "dailyParagraph": null,
+    "weeklyParagraph": null,
+    "semesterParagraph": null,
+    "freePattern": 0,
+    "scopePattern": 1,
+    "scopePercentage": 30,
+    "fixedPointPattern": 0,
+    "fixedPointPercentage": 15,
+    "fixedPointOrder": 0,
+    "fixedPointNumber": 3,
+    "runningTimeLimit": {
+      "startTime": "1788710400000",
+      "endTime": "1798300800000",
+      "openTimes": [
+        {
+          "dayStartTime": "21600000",
+          "dayEndTime": "86399000"
+        }
+      ],
+      "weekOpenTimes": [
+        {
+          "dayStartTime": "21600000",
+          "dayEndTime": "86399000",
+          "week": "1,2,3,4,5,6,7"
+        }
+      ]
+    },
+    "enableStatus": null,
+    "notice": null,
+    "currentTimeStamp": "1792425600413",
+    "patternId": "8a9780be7c5db4fa017c5e0d116000ab",
+    "faceRunningStatus": false,
+    "routes": null
+  },
+  "range": {
+    "scopePattern": 1,
+    "fixedPointPattern": null,
+    "rangeRunningRegion": [
+      [
+        {
+          "id": null,
+          "longitude": 102.986429,
+          "latitude": 29.982412,
+          "sort": 1
+        },
+        {
+          "id": null,
+          "longitude": 102.986408,
+          "latitude": 29.980786,
+          "sort": 2
+        },
+        {
+          "id": null,
+          "longitude": 102.987556,
+          "latitude": 29.980628,
+          "sort": 3
+        },
+        {
+          "id": null,
+          "longitude": 102.987508,
+          "latitude": 29.982301,
+          "sort": 4
+        },
+        {
+          "id": null,
+          "longitude": 103.002625,
+          "latitude": 29.979787,
+          "sort": 5
+        },
+        {
+          "id": null,
+          "longitude": 103.004153,
+          "latitude": 29.978867,
+          "sort": 6
+        },
+        {
+          "id": null,
+          "longitude": 103.00359,
+          "latitude": 29.978109,
+          "sort": 7
+        },
+        {
+          "id": null,
+          "longitude": 103.001718,
+          "latitude": 29.979025,
+          "sort": 8
+        },
+        {
+          "id": null,
+          "longitude": 103.002324,
+          "latitude": 29.979819,
+          "sort": 9
+        }
+      ]
+    ],
+    "invalidRangeRunningRegion": [],
+    "signRunningRegion": null,
+    "invalidSignRunningRegion": null,
+    "signPoint": null
+  }
+}
