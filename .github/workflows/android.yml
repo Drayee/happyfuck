@@ -72,20 +72,22 @@ jobs:
         with:
           python-version: '3.12'
 
-      # 原始 APK（112MB）不入库，从 Release 资产下载
+      # 原始 APK（112MB）不入库，放在 tag=ci-assets 的 Release 里。
+      # 私有仓库的资产直链要鉴权，所以用 gh（自动带 GITHUB_TOKEN），不用 curl。
       - name: Fetch original APK
         env:
-          URL: ${{ secrets.ORIG_APK_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          if [ -z "$URL" ]; then
-            echo "::error title=缺少原始 APK::请在仓库 Secrets 里配置 ORIG_APK_URL（原始 APK 的直链）"
+          mkdir -p /tmp/in
+          if ! gh release download ci-assets --repo "${{ github.repository }}"                --pattern '*.apk' --dir /tmp/in --clobber; then
+            echo "::error title=缺少原始 APK::在仓库建一个 tag 为 ci-assets 的 Release 并上传原版 APK"
             exit 1
           fi
-          mkdir -p /tmp/in
-          curl -fL --retry 3 --retry-delay 5 -o /tmp/in/orig.apk "$URL"
-          ls -lh /tmp/in/orig.apk
-          echo "ORIG_APK=/tmp/in/orig.apk" >> "$GITHUB_ENV"
+          ls -lh /tmp/in
+          f=$(ls /tmp/in/*.apk | head -1)
+          echo "ORIG_APK=$f" >> "$GITHUB_ENV"
+          echo "使用: $f"
 
       - name: Check apktool jar
         run: |
