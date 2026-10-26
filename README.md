@@ -1,177 +1,162 @@
 # HappyFuck 乐奸
 
-校园跑（乐健体育 `com.ledreamer.zz`）辅助工具，两个客户端：
+乐健体育（`com.ledreamer.zz`）校园跑辅助工具，两个客户端 + 一套逆向研究资料。
 
-| 客户端 | 形态 | 适合场景 |
+| 目录 | 是什么 |
+|---|---|
+| `desktop/` | **桌面版** —— PyQt6 程序，地图画跑道、规则校验、定时提交 |
+| `mobile/` | **手机版** —— 改包 APK 构建工程（Java 注入 + smali/so 补丁） |
+| `unpacked/` | **解包文件** —— 原始 APK、apktool 树、jadx 树（全部忽略，不入库） |
+| `lib/` | 双端共用算法（坐标系、规则、轨迹生成、AES 信封） |
+| `scripts/` | **脚本** —— 构建 / 运维 / 逆向 / 测试 |
+| `dist/` | **产物** —— APK、exe、日志（忽略） |
+| `docs/` | 知识文档（`reverse/` 逆向资料、`agents/` 技能配置、`ci.md`） |
+
+成品发布在 GitHub → [Drayee/happyfuck](https://github.com/Drayee/happyfuck/releases)
+
+---
+
+## 快速开始
+
+### 手机版
+
+```bash
+# 首次：把原版 APK 放到 unpacked/QQbase.apk（或设 ORIG_APK 环境变量）
+bash mobile/build_mobile.sh
+# 产物：dist/mobile/happyfuck_mobile.apk
+```
+
+构建流程：
+
+```
+① apktool d  原版 APK        → unpacked/apktool_out/
+② 生成轨迹资产              → apktool_out/assets/hf_route.txt
+③ 打 JS 定位补丁            → uni-jsframework.js
+④ 打 11 项 smali / so 补丁
+⑤ apktool b
+⑥ javac + d8 → classes7.dex 注入
+⑦ apksigner 签名 v1+v2+v3   → dist/mobile/
+```
+
+环境变量：
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| **桌面版** | PyQt6 Windows 程序 | 在电脑上画跑道、看规则、定时提交 |
-| **安卓版** | 改包 APK | 手机上直接跑，不用电脑、不用 root |
+| `PYTHON` | 自动探测 | CI 上是 `python3` |
+| `JAVA_HOME` | `C:/Program Files/Java/jdk-25` | 需 JDK 9+（用 `--release 8`） |
+| `ANDROID_SDK` | `C:/Program Files (x86)/Android/android-sdk` | |
+| `ORIG_APK` | `unpacked/QQbase.apk` | 没有解包树时用 |
 
-两者共用同一套轨迹几何与规则校验算法（`tools/`）。
-
----
-
-## 下载
-
-| 版本 | 地址 |
-|---|---|
-| 桌面版（Windows x64） | [最新 Release](https://github.com/Drayee/happyfuck/releases/latest) |
-| 安卓版（APK） | [android-v1.0.1](https://github.com/Drayee/happyfuck/releases/tag/android-v1.0.1) |
-
----
-
-## 安卓版
-
-基于原版 3.10.3 重打包，走 App 自己的定位 → 计距 → 围栏 → 打卡 → 上传链路，
-不伪造任何接口调用。
-
-### 功能
-
-- **范围跑一键刷** —— 合成 GPS 注入 `onLocationChanged`，App 自己算里程和配速
-- **手动画轨迹** —— 长按图标进编辑器，地图上点圈，保存即生效（应用内持久化）
-- **围栏显示** —— 跑过一次后自动缓存学校围栏，编辑器里红色虚线标出
-- **每日自动跑** —— 半自动（到点通知）/ 全自动（到点直接开跑），设置里可切换
-- **运行日志** —— 应用内直接查看，不需要 adb 或电脑
-
-### 安装
-
-1. 下载 `happyfuck_mobile.apk`
-2. 允许「安装未知来源应用」后安装
-3. 长按桌面图标，出现两个入口：
-
-```
-设计跑步轨迹     画圈、设时间、看日志
-运行日志         直接看执行记录
-```
-
-### 首次使用
-
-> **必须先手动跑一次范围跑。**
-
-第一次运行会把学期规则（`serRuleCondition`）和用户信息序列化缓存下来，
-之后「每日自动跑」才有东西回放。没跑过就点自动跑，会提示「还没有基准参数」。
-
-### 权限
-
-| 权限 | 什么时候需要 |
-|---|---|
-| 闹钟和提醒（Android 12+） | 用「每日自动跑」时 |
-| 悬浮窗 / 后台弹出界面 | 用**全自动**模式时（半自动不需要） |
-| 通知（Android 13+） | 半自动模式 |
-
-国产 ROM 建议额外设置：自启动白名单、电池优化无限制、多任务界面加锁。
-不做这几项，典型症状是「昨天跑了今天没跑」。
-
-### 换学校 / 换围栏
-
-不用重装，把新的 `hf_route.txt` 推到：
-
-```
-/sdcard/Android/data/com.ledreamer.zz/files/hf_route.txt
-```
-
-文件格式：
-
-```
-# 注释行
-pace=450          # 秒/公里
-noise=0.9         # GPS 噪声标准差（米）
-cadence=172       # 步/分钟
-29.9821874,102.9864419   # 关键点，闭环，至少 3 个
-29.9817397,102.9864325
-```
-
-运行时沿折线按配速插值，再叠加 AR(1) 时间相关噪声，每次跑的坐标都不同。
-
----
-
-## 桌面版
-
-在真实高德地图上画跑道，按学校规则生成符合人类跑步特征的轨迹，定时自动提交。
-
-### 运行
+### 桌面版
 
 ```bash
 pip install -r requirements.txt
-python app/app.py            # 或 python app/app.py --debug
+python desktop/app.py
 ```
 
-### 打包
+打包：
 
 ```bash
-pip install pyinstaller
-python -m PyInstaller --noconfirm --clean happyfuck.spec
-# 产物：dist/HappyFuck.exe
+pyinstaller --windowed --name HappyFuck --paths lib --paths desktop \
+  --add-data "lib;lib" --add-data "desktop/assets;assets" desktop/app.py
 ```
 
-详细说明见 [`app/README.md`](app/README.md)。
-
----
-
-## 目录结构
-
-```
-app/                 桌面版 PyQt6 主程序
-  app.py             入口
-  map_panel.py       地图与画圈
-  service.py         业务编排（登录/规则/生成/上传）
-  scheduler.py       定时任务
-  uploader.py        HTTP 上传
-tools/               共用核心
-  coord.py           坐标系转换
-  rules.py           学校规则解析与围栏判定
-  run_sim.py         轨迹生成（人类行为模型）
-  legym_envelope.py  AES 信封
-android/             安卓版构建工程
-  mobile/            构建脚本 + Java 注入代码 + 高德 stub
-  tools/             gen_track_asset.py / route_gen.py / apktool jar
-  assets/            学校围栏数据
-docs/ci.md           CI 说明
-happyfuck.spec       桌面版 PyInstaller 配置
-```
-
----
-
-## CI
-
-两条独立流水线，靠**路径**和**提交前缀**区分：
-
-| 代号 | 产物 | 触发 |
-|---|---|---|
-| **w** | Windows exe | 改 `app/**`、`tools/**`；或 `v*` tag |
-| **a** | 安卓 APK | 改 `android/**`；或 `android-*` tag |
-
-提交信息第一行加前缀可以强制指定：
+### 测试
 
 ```bash
-git commit -m "a: 修安卓权限门禁"    # 只跑安卓
-git commit -m "w: 修托盘图标"        # 只跑桌面
+python scripts/tests/test_pipeline.py
 ```
 
-细节见 [`docs/ci.md`](docs/ci.md)。
+校验：`lib/` 可导入、围栏数据、关键文件、路径配置、补丁锚点、轨迹生成。
 
 ---
 
-## 实现要点
+## 目录细节
 
-**桌面版**生成的轨迹要同时满足：
+```
+desktop/                  桌面版
+  app.py                  入口
+  map_panel.py            地图与画圈
+  service.py              业务编排（登录/规则/生成/上传）
+  scheduler.py            定时任务
+  uploader.py             HTTP 上传
+  config.py               路径与持久化（TOOLS → ../lib）
+  data/                   运行时数据（忽略）
 
-- 配速落在 `serMinPace ~ serMaxPace`
-- 里程 ≥ 规则要求
-- 围栏内比例 ≥ `scopePercentage`
-- 采样点距落在 App 的过滤窗口 `1.39 ~ 13 m`
-- 打卡点与 `signPoint` 对齐
+mobile/                   手机版构建工程
+  build_mobile.sh         一键构建
+  patch_smali.py          11 项 smali / so 补丁（幂等，带 --check）
+  patch_assets.py         JS 定位补丁
+  src/com/ledreamer/hf/   Java 注入代码（GPS / 编辑器 / 自动跑 / 日志）
+  stub/                   高德 SDK 编译期替身（不进 dex）
+  vendor/apktool_3.0.3.jar  必须与本地同版本（补丁是精确文本匹配）
+  hf-release.jks          签名（口令 android，仅自用）
+  assets/                 围栏数据（range_2024-2025_1.json）
 
-**安卓版**的 GPS 注入改在 `LocationService.onLocationChanged` 里完成，
-App 调用的每个方法（计距、配速、围栏判定、打卡、上传）都原样执行，
-所以不依赖任何私有接口，也不碰签名链路。
+lib/                      共用算法
+  coord.py                坐标系转换
+  rules.py                学校规则解析与围栏判定
+  run_sim.py              轨迹生成（人类行为模型）
+  route_gen.py            跑道几何（内缩环、重采样）
+  legym_envelope.py       AES 信封
 
-轨迹噪声用 **AR(1)**（`n = 0.95n + 0.31σ·gauss`）而不是每拍独立噪声：
-独立噪声会让相邻点位移互相叠加，3.5 km 能跑成 8.6 km，上报配速直接超出规则区间。
+scripts/
+  build/gen_track_asset.py  生成 hf_route / hf_track 资产
+  ops/map_editor.py         画圈 GUI
+  ops/go.py                 CLI 入口
+  ops/logcat_hf.*           手机日志抓取
+  ops/slim_apk.py           精简 APK（去 32 位 so）
+  ops/run.bat               统一启动器
+  reverse/                  反作弊扫描、证据脚本、Frida 脚本
+  tests/test_pipeline.py    冒烟测试
+
+unpacked/                 （忽略，约 1GB）
+  QQbase.apk              原版 APK
+  apktool_out/            apktool 反编译树
+  jadx_out/               jadx 反编译
+
+docs/
+  ci.md                   CI 说明
+  agents/                 技能套件配置（issue tracker / triage / domain）
+  reverse/                逆向报告、审计、方案（shots/ 存截图）
+  reverse/case/           案例记录（scope / timeline / workitems）
+```
+
+---
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [docs/reverse/static-reverse-report.md](docs/reverse/static-reverse-report.md) | 静态逆向总报告 |
+| [docs/reverse/anticheat-audit.md](docs/reverse/anticheat-audit.md) | 全量反作弊审计（31,797 smali / 14,509 内部类） |
+| [docs/reverse/daily-auto-run-plan.md](docs/reverse/daily-auto-run-plan.md) | 每日自动跑实现方案 |
+| [docs/reverse/audit-happyfuck-desktop.md](docs/reverse/audit-happyfuck-desktop.md) | 桌面版脚本审计 |
+| [docs/ci.md](docs/ci.md) | CI 触发规则与排错 |
+| [mobile/README.md](mobile/README.md) | 手机版详细文档（补丁清单、踩坑记录） |
+| [desktop/README.md](desktop/README.md) | 桌面版详细文档 |
+
+---
+
+## 关键技术结论
+
+**签名绑定有两套**
+
+1. `libsecurity.so` 的 `checkSignature` —— 比对证书 DER 的 `Arrays.hashCode` 与 `0x8f977ed0`，已 `nop` 绕过
+2. DexVMP 的 `Rengis.it()` —— 独立的 `getPackname`/`getSignature` 校验，重签名后恒 false，`hs()` 返回 null，已做空串回退
+
+**客户端没有其他反作弊**
+
+32k smali 扫完：无设备指纹上报、无 root/模拟器检测、无 mock 检测、无证书固定、易盾是死代码。剩下全是服务端校验（配速区间、围栏比例、时间窗）。
+
+**轨迹噪声必须用 AR(1)**
+
+独立噪声会让相邻采样点位移互相叠加 —— 设定 3.5 km 实测跑出 8.6 km，上报配速直接超区间。AR(1) 下 3.51 km / 449 s/km，与设定一致。
 
 ---
 
 ## 注意
 
-- 仓库里的 `android/mobile/hf-release.jks`（口令 `android`）是自用签名，**不要拿本仓库做公开分发**
+- `mobile/hf-release.jks`（口令 `android`）是自用签名，**不要拿本仓库做公开分发**
+- `unpacked/` 里的原版 APK 与反编译树都是第三方内容，仅供本机研究
 - 仅供学习研究，使用风险自负

@@ -1,14 +1,16 @@
 name: Android APK
 
 # 触发（三种都支持）：
-#   1) 路径过滤：改动 android/** 下任何文件
-#   2) 提交前缀：提交信息第一行带 a: / A: / [a]  → 强制跑；带 w: / [w] → 跳过
+#   1) 路径过滤：改动 mobile/** 、lib/** 或 scripts/build/**
+#   2) 提交前缀：提交信息第一行带 a: / A: / [a] → 强制跑；带 w: / [w] → 跳过
 #   3) 手动 / 发版：Actions 页面 Run workflow；或打 tag（android-* / v*）
 on:
   push:
-    branches: [main, master]
+    branches: [master, main]
     paths:
-      - 'android/**'
+      - 'mobile/**'
+      - 'lib/**'
+      - 'scripts/build/**'
       - '.github/workflows/android.yml'
     tags:
       - 'android-*'
@@ -49,9 +51,9 @@ jobs:
           first=$(printf '%s' "$MSG" | head -n1)
           echo "commit: $first"
           case "$first" in
-            *"[a]"*|a:*|A:*)          echo "run=true"  >> "$GITHUB_OUTPUT" ;;
-            *"[w]"*|w:*|W:*)          echo "run=false" >> "$GITHUB_OUTPUT" ;;
-            *)                        echo "run=true"  >> "$GITHUB_OUTPUT" ;;
+            *"[a]"*|a:*|A:*) echo "run=true"  >> "$GITHUB_OUTPUT" ;;
+            *"[w]"*|w:*|W:*) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+            *)               echo "run=true"  >> "$GITHUB_OUTPUT" ;;
           esac
 
   build:
@@ -67,55 +69,49 @@ jobs:
           java-version: '17'
 
       # 不用 android-actions/setup-android：它会去装已经下线的 'tools' 包而报错。
-      # GitHub 的 ubuntu 镜像自带 Android SDK，直接用，缺什么用 sdkmanager 补。
       - name: Setup Android SDK
         run: |
           set -e
           SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           echo "SDK: $SDK"
-          if [ ! -d "$SDK" ]; then
-            echo "::error::找不到预装 Android SDK"; exit 1
-          fi
+          [ -d "$SDK" ] || { echo "::error::找不到预装 Android SDK"; exit 1; }
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK"     >> "$GITHUB_ENV"
           SM=""
           for c in "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK/cmdline-tools/16.0/bin/sdkmanager" "$SDK/tools/bin/sdkmanager"; do
             [ -x "$c" ] && SM="$c" && break
           done
-          echo "sdkmanager: ${SM:-none}"
           if [ ! -d "$SDK/build-tools/35.0.0" ] || [ ! -d "$SDK/platforms/android-34" ]; then
-            if [ -z "$SM" ]; then echo "::error::缺少 build-tools 35.0.0 / android-34 且无 sdkmanager"; exit 1; fi
+            [ -n "$SM" ] || { echo "::error::缺少 build-tools 35.0.0 / android-34 且无 sdkmanager"; exit 1; }
             yes | "$SM" --licenses >/dev/null 2>&1 || true
             "$SM" "build-tools;35.0.0" "platforms;android-34"
           fi
-          ls "$SDK/build-tools" | tail -5
-          ls "$SDK/platforms"   | tail -5
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       # 原始 APK（112MB）不入库，放在 tag=ci-assets 的 Release 里。
-      # 私有仓库的资产直链要鉴权，所以用 gh（自动带 GITHUB_TOKEN），不用 curl。
+      # 私有仓库资产直链要鉴权，所以用 gh 而不是 curl。
       - name: Fetch original APK
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          mkdir -p /tmp/in
-          if ! gh release download ci-assets --repo "${{ github.repository }}"                --pattern '*.apk' --dir /tmp/in --clobber; then
+          mkdir -p unpacked
+          if ! gh release download ci-assets --repo "${{ github.repository }}" \
+               --pattern '*.apk' --dir unpacked --clobber; then
             echo "::error title=缺少原始 APK::在仓库建一个 tag 为 ci-assets 的 Release 并上传原版 APK"
             exit 1
           fi
-          ls -lh /tmp/in
-          f=$(ls /tmp/in/*.apk | head -1)
-          echo "ORIG_APK=$f" >> "$GITHUB_ENV"
-          echo "使用: $f"
+          f=$(ls unpacked/*.apk | head -1)
+          mv "$f" unpacked/QQbase.apk
+          ls -lh unpacked/QQbase.apk
 
       - name: Check apktool jar
         run: |
           set -e
-          JAR=android/tools/apktool_3.0.3.jar
+          JAR=mobile/vendor/apktool_3.0.3.jar
           test -f "$JAR" || { echo "::error::缺少 $JAR（smali 补丁依赖同版本 apktool）"; exit 1; }
           ls -lh "$JAR"
 
@@ -125,23 +121,22 @@ jobs:
         run: |
           set -e
           export ANDROID_SDK="$ANDROID_SDK_ROOT"
-          echo "ANDROID_SDK=$ANDROID_SDK"
-          bash android/mobile/build_mobile.sh
+          bash mobile/build_mobile.sh
 
       - name: Show result
-        run: ls -lh android/mobile/dist/
+        run: ls -lh dist/mobile/
 
       - uses: actions/upload-artifact@v4
         with:
           name: happyfuck-android-apk
           path: |
-            android/mobile/dist/happyfuck_mobile.apk
-            android/mobile/dist/*.idsig
+            dist/mobile/happyfuck_mobile.apk
+            dist/mobile/*.idsig
           retention-days: 30
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/') || inputs.release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/mobile/dist/happyfuck_mobile.apk
+          files: dist/mobile/happyfuck_mobile.apk
           generate_release_notes: true

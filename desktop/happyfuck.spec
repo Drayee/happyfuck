@@ -3,8 +3,8 @@
 import os
 
 ROOT = os.path.dirname(os.path.abspath(SPEC))
-APP = os.path.join(ROOT, 'app')
-TOOLS = os.path.join(ROOT, 'tools')
+APP = os.path.dirname(os.path.abspath(SPEC))
+TOOLS = os.path.join(os.path.dirname(APP), 'lib')
 
 a = Analysis(
     [os.path.join(APP, 'app.py')],

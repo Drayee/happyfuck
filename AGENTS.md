@@ -4,10 +4,16 @@
 
 ## 仓库说明
 
-乐健体育（`com.ledreamer.zz`）校园跑辅助工具，两个客户端共用 `tools/` 下的轨迹与规则算法：
+乐健体育（`com.ledreamer.zz`）校园跑辅助工具，两个客户端共用 `lib/` 下的轨迹与规则算法：
 
-- `app/` —— 桌面版 PyQt6 程序
-- `android/` —— 安卓改包构建工程（在本地工作区位于 `work/qqbase-apk/`）
+- `desktop/` —— 桌面版 PyQt6 程序
+- `mobile/` —— 手机版改包构建工程（`build_mobile.sh` 一键构建）
+- `lib/` —— 双端共用算法（coord / rules / run_sim / route_gen / legym_envelope）
+- `scripts/` —— 构建、运维、逆向、测试脚本
+- `unpacked/` —— 解包树与原始 APK（已忽略，约 1GB）
+- `dist/` —— 产物（已忽略）
+
+结构改动后先跑 `python scripts/tests/test_pipeline.py` 验证路径与补丁锚点。
 
 最终产物与 Release 在 GitHub 仓库 `Drayee/happyfuck`。
 

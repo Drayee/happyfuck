@@ -16,7 +16,7 @@ APP_VERSION = '1.0.0'
 HERE = os.path.dirname(os.path.abspath(__file__))
 # tools 目录：源码运行 = 仓库根的 tools/；冻结运行 = tools 在 exe 同级 tools/
 ROOT = os.path.dirname(HERE) if not is_frozen() else exe_dir()
-TOOLS = os.path.join(ROOT, 'tools')
+TOOLS = os.path.join(ROOT, 'lib')
 ASSETS = os.path.join(resource_base(), 'assets')
 if is_frozen():
     # exe 同级目录，升级不丢配置

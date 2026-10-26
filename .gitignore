@@ -1,15 +1,51 @@
-# Python
+# ============================================================
+# 仓库结构
+#   desktop/   桌面版 PyQt6
+#   mobile/    手机版构建工程
+#   lib/       双端共用算法（禁止忽略！）
+#   scripts/   构建 / 运维 / 逆向 / 测试脚本
+#   unpacked/  解包树与原始 APK（忽略）
+#   dist/      产物（忽略）
+#   docs/      知识与技能配置
+# ============================================================
+
+# ---------- Python ----------
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+ENV/
+env/
 
-# 打包产物
+# 注意：故意不写 Python 模板常见的 `lib/` 规则，
+# 它会误伤本仓库的共享算法目录 lib/。
+
+# ---------- 构建产物 ----------
 build/
 dist/
+sdist/
 *.spec.bak
 
-# 运行时数据（账号、token、轨迹，绝不提交）
-app/data/
+# ---------- 解包树（约 1GB，不入库）----------
+unpacked/apktool_out/
+unpacked/jadx_out/
+unpacked/jadx/
+unpacked/*.apk
+unpacked/*.zip
+unpacked/*.log
+
+# ---------- APK ----------
+*.apk
+*.xapk
+*.apks
+QQbase*.apk
+
+# ---------- 桌面运行时数据（账号 / token / 轨迹，绝不提交）----------
+desktop/data/
 data/
 *.log
 session.json
@@ -19,22 +55,33 @@ tracks.json
 hs_table.json
 vo_*.json
 
-# 虚拟环境
-venv/
-.venv/
+# ---------- 大体积 vendor ----------
+desktop/vendor/
+**/vendor/*.so.xz
+frida-server-*
 
-# IDE / OS
+# ---------- 编译中间产物 ----------
+**/*.class
+mobile/classes/
+mobile/dex_out/
+
+# ---------- 临时 ----------
+_tmp_*.py
+_test_*.py
+.dsh-vision-router/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ---------- 截图：默认忽略，文档用图例外 ----------
+*.png
+!docs/reverse/shots/*.png
+!mobile/assets/*.png
+
+# ---------- IDE / OS ----------
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-*.tmp
-*.bak
-
-# 安卓构建产物
-android/apktool_out/
-android/mobile/dist/
-android/mobile/build/
-android/mobile/__pycache__/
-android/apktool.yml
-android/build/
+desktop.ini
