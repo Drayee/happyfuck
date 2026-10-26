@@ -25,7 +25,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APKTOOL = os.path.join(ROOT, 'apktool_out')
+APKTOOL = os.environ.get('APKTOOL_OUT') or os.path.join(ROOT, 'unpacked', 'apktool_out')
 
 SVC = os.path.join(APKTOOL, 'smali_classes3', 'com', 'ledreamer',
                    'runningModule', 'service', 'LocationService.smali')

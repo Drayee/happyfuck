@@ -83,32 +83,30 @@ jobs:
           python -c "import PyQt6, Crypto, requests; print('deps OK')"
           python -c "import sys; sys.path.insert(0,'lib'); import route_gen, rules, run_sim; print('lib OK')"
 
-      # desktop/data 是运行时目录（已忽略），不打进包；app 启动时会自建
-      - name: Build exe (onedir)
+      # 用 spec 而不是命令行参数：app 是运行时动态 import（coord/run_sim/...），
+      # 靠 spec 里的 hiddenimports 才能收进 bundle。
+      - name: Build exe (onefile)
         run: |
-          pyinstaller --noconfirm --clean --windowed `
-            --name HappyFuck `
-            --paths lib `
-            --paths desktop `
-            --add-data "lib;lib" `
-            --add-data "desktop/assets;assets" `
-            --distpath dist/desktop --workpath build/desktop `
-            desktop/app.py
+          python -m PyInstaller --noconfirm --clean desktop/happyfuck.spec
+          if (-not (Test-Path dist/HappyFuck.exe)) { Write-Error "HappyFuck.exe 未生成"; exit 1 }
+          Get-Item dist/HappyFuck.exe | Select-Object Name, Length
 
-      - name: Zip
+      - name: Rename artifact
         run: |
-          Compress-Archive -Path dist/desktop/HappyFuck/* -DestinationPath dist/desktop/HappyFuck-win64.zip -Force
-          Get-ChildItem dist/desktop | Select-Object Name, Length
+          $ver = "${{ github.ref_name }}"
+          if (-not $ver) { $ver = "dev" }
+          Copy-Item dist/HappyFuck.exe "dist/HappyFuck-$ver-windows-x64.exe"
+          Get-Item "dist/HappyFuck-$ver-windows-x64.exe" | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
           name: happyfuck-windows
-          path: dist/desktop/HappyFuck-win64.zip
+          path: dist/HappyFuck-*-windows-x64.exe
           retention-days: 30
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/') || inputs.release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/desktop/HappyFuck-win64.zip
+          files: dist/HappyFuck-*-windows-x64.exe
           generate_release_notes: true

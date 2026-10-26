@@ -8,19 +8,13 @@
 import sys, os, json, math
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# 兼容两种布局：
-#   单仓 —— rules/run_sim 与本源文件同目录
-#   多仓 —— 源文件在 android/tools/，依赖在仓库根的 tools/
-# 做法：向上找至多 3 层里第一个真正含 run_sim.py 的 tools 目录
-_cands = [_HERE]
-_p = _HERE
-for _ in range(3):
-    _nxt = os.path.dirname(_p)
-    if not _nxt or _nxt == _p:
-        break
-    _cands.append(os.path.join(_nxt, 'tools'))
-    _p = _nxt
-for _c in _cands:
+ROOT = os.path.dirname(os.path.dirname(_HERE))   # scripts/build -> 仓库根
+
+# 找到共享算法所在目录（本仓 lib/，兼容旧布局的 tools/）
+for _c in (_HERE,
+           os.path.join(ROOT, 'lib'),
+           os.path.join(ROOT, 'tools'),
+           os.path.join(ROOT, 'android', 'tools')):
     if os.path.isfile(os.path.join(_c, 'run_sim.py')) and _c not in sys.path:
         sys.path.insert(0, _c)
         break
@@ -29,19 +23,24 @@ import run_sim as RUNSIM
 import rules as RULES
 import route_gen as RG
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+HERE = _HERE
 _FENCE = 'range_2024-2025_1.json'
 DATA = None
-for _c in (os.path.join(ROOT, 'assets'),
+for _c in (os.path.join(ROOT, 'mobile', 'assets'),
+           os.path.join(ROOT, 'desktop', 'data'),
            os.path.join(ROOT, 'data'),
+           os.path.join(ROOT, 'assets'),
            os.path.join(ROOT, 'happyfuck', 'data')):
     if os.path.isfile(os.path.join(_c, _FENCE)):
         DATA = _c
         break
 if DATA is None:
-    DATA = os.path.join(ROOT, 'assets')
-OUT = os.path.join(ROOT, 'apktool_out', 'assets', 'hf_track.json')
+    DATA = os.path.join(ROOT, 'mobile', 'assets')
+
+APKTOOL_OUT = os.environ.get('APKTOOL_OUT') or os.path.join(ROOT, 'unpacked', 'apktool_out')
+ASSETS_OUT = os.path.join(APKTOOL_OUT, 'assets')
+os.makedirs(ASSETS_OUT, exist_ok=True)
+OUT = os.path.join(ASSETS_OUT, 'hf_track.json')
 
 # 1. 加载围栏
 with open(os.path.join(DATA, 'range_2024-2025_1.json'), 'r', encoding='utf-8') as f:
@@ -155,7 +154,7 @@ print('文件大小: %d bytes' % os.path.getsize(OUT))
 # 同时输出手机端读取的纯文本格式：每行 lat,lon,speed
 # （SyntheticGps.load() 读这个，避免在 Android 侧解析 JSON）
 # 关键点模式资产：围栏内缩环的顶点（稀疏闭环），供 SyntheticGps 运行时插值 + 加噪
-OUT_ROUTE = os.path.join(ROOT, 'apktool_out', 'assets', 'hf_route.txt')
+OUT_ROUTE = os.path.join(ASSETS_OUT, 'hf_route.txt')
 NL = chr(10)
 with open(OUT_ROUTE, 'w', encoding='utf-8') as f:
     f.write('# HappyFuck route: inset-loop waypoints' + NL)
@@ -166,7 +165,7 @@ with open(OUT_ROUTE, 'w', encoding='utf-8') as f:
         f.write('%.7f,%.7f' % (la, lo) + NL)
 print('written %s waypoints=%d bytes=%d' % (OUT_ROUTE, len(waypoints), os.path.getsize(OUT_ROUTE)))
 
-OUT_TXT = os.path.join(ROOT, 'apktool_out', 'assets', 'hf_track.txt')
+OUT_TXT = os.path.join(ASSETS_OUT, 'hf_track.txt')
 with open(OUT_TXT, 'w', encoding='utf-8') as f:
     f.write(NL.join('%.7f,%.7f,%.3f' % (la, lo, sp) for la, lo, sp in track_data))
 print('written %s  lines=%d bytes=%d' % (OUT_TXT, len(track_data), os.path.getsize(OUT_TXT)))

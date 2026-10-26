@@ -17,7 +17,8 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JS = os.path.join(ROOT, 'apktool_out', 'assets', 'uni-jsframework.js')
+APKTOOL_OUT = os.environ.get('APKTOOL_OUT') or os.path.join(ROOT, 'unpacked', 'apktool_out')
+JS = os.path.join(APKTOOL_OUT, 'assets', 'uni-jsframework.js')
 
 # 合成坐标：四川农业大学雅安校区围栏内，GCJ-02
 LAT = '29.9821616'

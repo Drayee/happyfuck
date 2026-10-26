@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # HappyFuck 手机版 —— 一键构建脚本
 #
-# 产出: mobile/dist/happyfuck_<version>.apk
-# 依赖: JDK 17+ / Android SDK build-tools (apksigner, d8) / Python 3 / apktool_3.0.3.jar
+# 产出: dist/mobile/happyfuck_mobile.apk
+# 依赖: JDK 17+ / Android SDK build-tools (apksigner, d8) / Python 3 / vendor/apktool_3.0.3.jar
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MOBILE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$MOBILE/.." && pwd)"
+APKTOOL_OUT="$ROOT/unpacked/apktool_out"
 cd "$ROOT"
 
 # ---- Python 探测（CI 上是 python3，本机是完整路径）----
@@ -26,35 +28,38 @@ ANDROID_JAR="$SDK/platforms/android-34/android.jar"
 D8_JAR="$SDK/build-tools/35.0.0/lib/d8.jar"
 APKSIGNER="$SDK/build-tools/35.0.0/apksigner"
 [ -x "$APKSIGNER" ] || APKSIGNER="$SDK/build-tools/35.0.0/apksigner.bat"   # Windows
-APKTOOL_JAR="$ROOT/tools/apktool_3.0.3.jar"
-KEYSTORE="${HF_KEYSTORE:-$ROOT/mobile/hf-release.jks}"
+APKTOOL_JAR="$MOBILE/vendor/apktool_3.0.3.jar"
+KEYSTORE="${HF_KEYSTORE:-$MOBILE/hf-release.jks}"
 KS_PASS="${HF_KS_PASS:-android}"
 KS_ALIAS="${HF_KS_ALIAS:-hf}"
 
-DIST="$ROOT/mobile/dist"
-BUILD="$ROOT/mobile/build"
-mkdir -p "$DIST" "$BUILD"
+DIST="$ROOT/dist/mobile"
+BUILD="$MOBILE/build"
+mkdir -p "$DIST" "$BUILD" "$ROOT/unpacked"
 
-if [ ! -d apktool_out ]; then
-  if [ -z "${ORIG_APK:-}" ] || [ ! -f "${ORIG_APK:-}" ]; then
-    echo "[!] apktool_out 不存在，且未设置 ORIG_APK=/path/to/QQbase.apk"
+if [ ! -d "$APKTOOL_OUT" ]; then
+  ORIG="${ORIG_APK:-$ROOT/unpacked/QQbase.apk}"
+  if [ ! -f "$ORIG" ]; then
+    echo "[!] 没有反编译树，也找不到原始 APK"
+    echo "    期望位置: $ROOT/unpacked/QQbase.apk"
+    echo "    或设置 ORIG_APK=/path/to/QQbase.apk"
     exit 1
   fi
   echo "==> [1.9/6] 反编译原始 APK（首次）"
-  "$JAVA" -Xmx4g -jar "$APKTOOL_JAR" d "$ORIG_APK" -o apktool_out -f
+  "$JAVA" -Xmx4g -jar "$APKTOOL_JAR" d "$ORIG" -o "$APKTOOL_OUT" -f
 fi
 
 echo "==> [1/6] 生成范围跑轨迹资产"
-"$PY" tools/gen_track_asset.py
+APKTOOL_OUT="$APKTOOL_OUT" "$PY" "$ROOT/scripts/build/gen_track_asset.py"
 
 echo "==> [1.5/6] 资产层补丁（uni-jsframework.js 定位）"
-"$PY" mobile/patch_assets.py
+APKTOOL_OUT="$APKTOOL_OUT" "$PY" "$MOBILE/patch_assets.py"
 
 echo "==> [1.8/6] smali / so 层补丁（幂等）"
-"$PY" mobile/patch_smali.py
+APKTOOL_OUT="$APKTOOL_OUT" "$PY" "$MOBILE/patch_smali.py"
 
 echo "==> [2/6] apktool 重打包（含 smali 补丁）"
-"$JAVA" -Xmx4g -jar "$APKTOOL_JAR" b apktool_out -o "$BUILD/base_unsigned.apk"
+"$JAVA" -Xmx4g -jar "$APKTOOL_JAR" b "$APKTOOL_OUT" -o "$BUILD/base_unsigned.apk"
 
 echo "==> [3/6] 编译 -> dex（stub 与业务码一起编译，stub 不进 dex）"
 rm -rf "$BUILD/classes" "$BUILD/dex"
@@ -64,7 +69,7 @@ mkdir -p "$BUILD/classes" "$BUILD/dex"
 # Windows 版 javac 的 -sourcepath / -cp 分隔符是 ';'，而 MSYS 会把含 ':'
 # 的整串当成一个路径，导致 stub 目录解析不到。
 "$JAVAC" --release 8 -cp "$ANDROID_JAR" -d "$BUILD/classes" \
-  $(find mobile/src mobile/stub -name "*.java" | tr '\n' ' ') \
+  $(find "$MOBILE/src" "$MOBILE/stub" -name "*.java" | tr '\n' ' ') \
   2>&1 | grep -vE "警告|warning|已过时|源值|目标值|Xlint" || true
 
 # stub 只用于编译；真实类在 APK 的 dex 里，d8 只需保留引用
