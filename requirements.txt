@@ -1,0 +1,9 @@
+# HappyFuck 桌面版（Windows）依赖
+# CI: .github/workflows/desktop.yml
+PyQt6>=6.6
+PyQt6-WebEngine>=6.6
+pycryptodome>=3.20
+requests>=2.31
+
+# 打包用（CI 单独安装，不写进运行时依赖）
+# pyinstaller>=6.6
