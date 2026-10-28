@@ -1,0 +1,73 @@
+name: Checks
+
+# 轻量护栏：不打包，只跑「结构/反射/语法」三类检查。
+# 目的：把「编译通过就算完成」补上一道机械防线。
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 仓库结构 + 路径配置 + 围栏数据 + 轨迹生成
+      # 没有 unpacked/ 时自动跳过补丁锚点检查
+      - name: 冒烟测试
+        run: python scripts/tests/test_pipeline.py
+
+      # 反射名字必须能在 smali 里找到（jadx 的名字不可用于反射）
+      # 仓库里没有 unpacked/，这一步会自动 skip 并返回 0
+      - name: 反射名字校验
+        run: python scripts/tests/check_reflection_names.py
+
+      - name: Python 语法
+        run: |
+          python -m compileall -q lib scripts desktop
+
+      - name: Shell 语法
+        run: |
+          set -e
+          for f in mobile/build_mobile.sh scripts/ops/*.sh; do
+            [ -f "$f" ] || continue
+            bash -n "$f"
+            echo "  ok  $f"
+          done
+
+      - name: Workflow YAML 可解析
+        run: |
+          pip install pyyaml
+          python - <<'PY'
+          import glob, sys, yaml
+          bad = 0
+          for f in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  yaml.safe_load(open(f, encoding='utf-8'))
+                  print('  ok  ' + f)
+              except Exception as e:
+                  print('  FAIL %s: %s' % (f, e))
+                  bad = 1
+          sys.exit(bad)
+          PY
+
+      # AndroidManifest 里不能出现裸非 ASCII（MIUI 解析器会因此装不上）
+      - name: Manifest 非 ASCII 检查
+        run: |
+          set -e
+          F=apktool_out/AndroidManifest.xml
+          if [ ! -f "$F" ]; then
+            echo "[skip] 没有 $F（解包树不入库）"
+            exit 0
+          fi
+          if grep -nP '[^\x00-\x7F]' "$F" | grep -v '^\s*<!--'; then
+            echo "[FAIL] Manifest 里出现裸非 ASCII 字符，MIUI 会报 packageInfo is null"
+            exit 1
+          fi
+          echo "  ok  $F 全 ASCII"

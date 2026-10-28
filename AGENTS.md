@@ -17,6 +17,13 @@
 
 最终产物与 Release 在 GitHub 仓库 `Drayee/happyfuck`。
 
+## 反射与反编译
+
+- 反射用的字段名/方法名以 `unpacked/apktool_out/smali*` 为准；jadx 输出是反混淆名，**不可**用于反射。
+- 读 jadx 源码时用 `grep -v '@Metadata'`，否则每行几 KB 的注解会撑爆工具输出。
+- 「能不能跑」以 `bash scripts/ops/verify_on_device.sh` 为准，不以「编译通过」为准。
+- 提交前会跑 `scripts/tests/check_reflection_names.py`；新机器先 `bash scripts/ops/install_git_hooks.sh`。
+
 ## Agent skills
 
 ### Issue tracker
