@@ -280,6 +280,99 @@ public class HfAutoRun {
         }
     }
 
+    // =====================================================================
+    // 学期新鲜度检查
+    //
+    // 自动跑回放的是第一次手动跑时缓存的 serRuleCondition（含学期/时间窗/
+    // 配速区间）。学期一变这些就全过期，上报会被判无效。
+    // 开跑前用同一个 token 查一次当前学期；不一致就跳过并提示手动跑一次。
+    // =====================================================================
+
+    private static final String BASE = "https://cpes.legym.cn/";
+    private static final String SEM_PATH = "education/semester/getCurrent";
+
+    public static final int SEM_OK = 1;
+    public static final int SEM_CHANGED = 0;
+    public static final int SEM_UNKNOWN = -1;
+
+    /** 1=一致 0=已变更 -1=查不到（网络/token/解析失败） */
+    public static int checkSemesterFresh(Context c) {
+        try {
+            Bundle b = loadExtras(c);
+            if (b == null) { HfLog.w(TAG, "sem: 没有缓存参数"); return SEM_UNKNOWN; }
+            Object ui = b.getParcelable("userInfo");
+            if (ui == null) { HfLog.w(TAG, "sem: 缓存里没有 userInfo"); return SEM_UNKNOWN; }
+
+            String token = (String) ui.getClass().getMethod("getAccessToken").invoke(ui);
+            String mine = (String) ui.getClass().getMethod("getSemesterId").invoke(ui);
+            if (token == null || token.isEmpty()) { HfLog.w(TAG, "sem: token 为空"); return SEM_UNKNOWN; }
+            if (mine == null || mine.isEmpty()) { HfLog.w(TAG, "sem: 本地 semesterId 为空"); return SEM_UNKNOWN; }
+
+            String body = httpGet(BASE + SEM_PATH, token, 6000);
+            if (body == null) return SEM_UNKNOWN;
+            org.json.JSONObject root = new org.json.JSONObject(body);
+            int code = root.optInt("code", -1);
+            if (code != 0) { HfLog.w(TAG, "sem: 接口 code=" + code); return SEM_UNKNOWN; }
+            org.json.JSONObject data = root.optJSONObject("data");
+            if (data == null) { HfLog.w(TAG, "sem: data 为空"); return SEM_UNKNOWN; }
+            String cur = data.optString("semesterId", "");
+            if (cur.isEmpty()) cur = data.optString("id", "");
+            if (cur.isEmpty()) { HfLog.w(TAG, "sem: 返回里没有 semesterId"); return SEM_UNKNOWN; }
+            boolean same = cur.equals(mine);
+            HfLog.i(TAG, "sem: local=" + mine + " server=" + cur + " -> " + (same ? "一致" : "已变更"));
+            return same ? SEM_OK : SEM_CHANGED;
+        } catch (Throwable t) {
+            HfLog.w(TAG, "sem: 检查失败 " + t);
+            return SEM_UNKNOWN;
+        }
+    }
+
+    private static String httpGet(String url, String token, int timeoutMs) {
+        java.net.HttpURLConnection conn = null;
+        try {
+            conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
+            conn.setRequestProperty("Authorization", "Bearer " + token);
+            conn.setRequestProperty("Accept", "application/json");
+            int rc = conn.getResponseCode();
+            java.io.InputStream in = rc >= 200 && rc < 300 ? conn.getInputStream() : conn.getErrorStream();
+            if (in == null) { HfLog.w(TAG, "sem: HTTP " + rc + " 无响应体"); return null; }
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            String s = new String(bos.toByteArray(), "UTF-8");
+            if (rc != 200) HfLog.w(TAG, "sem: HTTP " + rc + " body=" + (s.length() > 200 ? s.substring(0, 200) : s));
+            return s;
+        } catch (Throwable t) {
+            HfLog.w(TAG, "sem: HTTP 异常 " + t);
+            return null;
+        } finally {
+            if (conn != null) try { conn.disconnect(); } catch (Throwable ignore) { }
+        }
+    }
+
+    /**
+     * 后台线程调用：先查学期再决定是否开跑。
+     * @return null = 已启动；否则是要展示给用户的提示文案
+     */
+    public static String checkAndStart(Context c) {
+        int st = checkSemesterFresh(c);
+        if (st == SEM_CHANGED) {
+            String msg = "学期已变更，今天的自动跑已跳过。请手动跑一次以更新规则";
+            HfLog.w(TAG, msg);
+            return msg;
+        }
+        if (st == SEM_UNKNOWN) {
+            HfLog.w(TAG, "学期检查没结果，按缓存规则继续");
+        }
+        boolean ok = startRun(c);
+        return ok ? null : "自动跑启动失败（检查后台弹出/悬浮窗权限）";
+    }
+
     public static boolean startRun(Context c) {
         Intent it = buildRunIntent(c);
         if (it == null) return false;

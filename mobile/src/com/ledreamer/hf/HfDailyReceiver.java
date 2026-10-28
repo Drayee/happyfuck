@@ -21,6 +21,32 @@ public class HfDailyReceiver extends BroadcastReceiver {
     private static final String TAG = "HF_ALARM";
     public static final String ACTION_ALARM = "com.ledreamer.hf.ACTION_ALARM";
 
+    /**
+     * 后台线程里先查学期再开跑：
+     * - 学期变了 -> 跳过并通知（避免用过期规则跑出无效记录）
+     * - 查不到（网络/token）-> 按缓存规则继续
+     * 用 goAsync() 保活，避免 onReceive 返回后进程被回收。
+     */
+    private void startWithSemesterCheck(final Context c) {
+        final PendingResult pr = goAsync();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String msg = HfAutoRun.checkAndStart(c);
+                    if (msg != null) {
+                        HfScheduler.postResultNotification(c, msg);
+                    }
+                } catch (Throwable t) {
+                    HfLog.e(TAG, "auto start err", t);
+                    HfScheduler.postResultNotification(c, "自动跑启动异常，请手动跑一次");
+                } finally {
+                    try { pr.finish(); } catch (Throwable ignore) { }
+                }
+            }
+        }).start();
+    }
+
     @Override
     public void onReceive(Context ctx, Intent it) {
         try {
@@ -30,12 +56,9 @@ public class HfDailyReceiver extends BroadcastReceiver {
             String action = it == null ? null : it.getAction();
 
             if (HfAutoRun.ACTION_START_NOW.equals(action)) {
-                // 用户点了通知
+                // 用户点了通知：同样先查学期，避免用过期规则跑
                 HfLog.i(TAG, "user tapped start");
-                boolean ok = HfAutoRun.startRun(c);
-                if (!ok) {
-                    HfScheduler.postResultNotification(c, "启动失败，请手动打开 App 跑一次");
-                }
+                startWithSemesterCheck(c);
                 return;
             }
 
@@ -68,11 +91,7 @@ public class HfDailyReceiver extends BroadcastReceiver {
             // ④ 按模式触发
             String mode = HfAutoRun.getMode(c);
             if (HfAutoRun.MODE_AUTO.equals(mode)) {
-                boolean ok = HfAutoRun.startRun(c);
-                if (!ok) {
-                    // 全自动被拦，降级为通知
-                    HfScheduler.postStartNotification(c);
-                }
+                startWithSemesterCheck(c);
             } else {
                 HfScheduler.postStartNotification(c);
             }
