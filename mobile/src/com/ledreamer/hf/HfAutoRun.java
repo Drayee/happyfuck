@@ -228,12 +228,50 @@ public class HfAutoRun {
      * 拉起跑步页。
      * @return true = 已发出 startActivity
      */
+    /**
+     * 上传链路需要 UniversityApplication.a（companion 的 d()）。
+     * 这个静态字段**只有 uni-app 流程（UniAppViewModel）会赋值**；
+     * 自动跑直接拉起 RangeRunningActivity 绕过了 uni-app，
+     * 冷启动时它是 null，于是 RunningViewModel.i() 命中
+     *   if (UniversityApplication.INSTANCE.d() == null) { 提示"没有用户数据"; }   ← 静默不上传
+     *
+     * 这里用我们缓存的 userInfo（hf_intent.bin 里那个）把它补上。
+     */
+    private static boolean ensureAppUserInfo(Context c) {
+        try {
+            Class<?> ua = Class.forName("com.ledreamer.zz.UniversityApplication");
+            java.lang.reflect.Field f = ua.getField("a");
+            Object cur = f.get(null);
+            if (cur != null) {
+                HfLog.i(TAG, "app userInfo already present");
+                return true;
+            }
+            Bundle b = loadExtras(c);
+            if (b == null) {
+                HfLog.w(TAG, "ensureUserInfo: 没有缓存的参数");
+                return false;
+            }
+            Object ui = b.getParcelable("userInfo");
+            if (ui == null) {
+                HfLog.w(TAG, "ensureUserInfo: 缓存的 userInfo 为空");
+                return false;
+            }
+            f.set(null, ui);
+            HfLog.i(TAG, "app userInfo injected from cache -> " + ui.getClass().getSimpleName());
+            return true;
+        } catch (Throwable t) {
+            HfLog.e(TAG, "ensureUserInfo err: " + t, t);
+            return false;
+        }
+    }
+
     public static boolean startRun(Context c) {
         Intent it = buildRunIntent(c);
         if (it == null) return false;
         try {
             finishTriggered = false;
             armed = true;
+            ensureAppUserInfo(c);          // 否则上传会因 d()==null 被静默拒绝
             c.getApplicationContext().startActivity(it);
             HfLog.i(TAG, "startRun ok (armed)");
             return true;
@@ -369,9 +407,20 @@ public class HfAutoRun {
         if (km < 0 || km < target) return false;
         finishTriggered = true;
         HfLog.i(TAG, "target reached: " + km + " km >= " + target + " km, finishing");
+        ensureAppUserInfo(c);              // 收尾前再确认一次，防止中途被清
         try {
             a.getClass().getMethod("S").invoke(a);   // public final void S()
             HfLog.i(TAG, "S() invoked");
+            // 诊断：S() 之后 VO 有没有真的构建出来（null 就说明收尾链路被跳过）
+            try {
+                Object vo = a.getClass().getField("uploadRunInfoReqVo").get(a);
+                HfLog.i(TAG, "uploadVo = " + (vo == null ? "NULL(!)" : "built"));
+                if (vo == null) {
+                    HfLog.e(TAG, "上传数据没构建出来：检查 userInfo / serRuleCondition 是否缺失");
+                }
+            } catch (Throwable t) {
+                HfLog.w(TAG, "读取 uploadRunInfoReqVo 失败: " + t);
+            }
             setLastRunDate(c, new java.text.SimpleDateFormat("yyyy-MM-dd",
                     java.util.Locale.US).format(new java.util.Date()));
             armed = false;
