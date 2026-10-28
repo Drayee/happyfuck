@@ -233,6 +233,68 @@ def patch_viewmodel():
     const-string v1, "hs(key)\"""")
 
 
+# ---------------------------------------------------------------- P13
+def patch_auto_finish_guard():
+    """RunningActivity.F0()：自动跑期间直接返回，跳过 App 自己的结束判定。
+
+    RunningActivity.j 是静态常量 200（只在 <clinit> 赋值，之后从不更新），
+    所以 F0() 会在跑到 200 米时就判定「达标」-> 弹「确认结束跑步」对话框。
+    自动跑没人点确认，对话框会一直挂着，还可能被误触提前结束。
+    自动跑的收尾统一交给 HfAutoRun.checkAndFinish()。
+    """
+    return patch_text(
+        RUN_ACT, 'RunningActivity.F0 auto-run guard', 'HF_AUTOFIN',
+        """.method public final F0()V
+    .locals 4
+
+    .line 1""",
+        """.method public final F0()V
+    .locals 4
+
+    # HF_AUTOFIN: 自动跑期间跳过 App 自己的结束判定
+    invoke-static {}, Lcom/ledreamer/hf/HfAutoRun;->isArmed()Z
+
+    move-result v0
+
+    if-nez v0, :hf_f0_go
+
+    return-void
+
+    :hf_f0_go
+    .line 1""")
+
+
+# ---------------------------------------------------------------- P12
+def patch_stop_order():
+    """RunningActivity.S()：把 i1()（停服务）挪到 x0()/u0() 之后。
+
+    stopService 会触发 LocationService.onDestroy() -> j0()，而 j0() 会把
+    f1596n（开始时间）置空、f1592j（轨迹点）清空。
+    S() 原顺序是先停服务再构建 VO，一旦 onDestroy 抢在前面，
+    上传报文里的 startTime 就是空串、轨迹可能为空 -> 服务端判无效。
+    """
+    return patch_text(
+        RUN_ACT, 'RunningActivity.S stop-last', 'HF_STOPLAST',
+        """    .line 4
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->i1()V
+
+    .line 5
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->x0()V
+
+    .line 6
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->u0()V""",
+        """    # HF_STOPLAST: 停服务会触发 onDestroy -> j0() 清空开始时间与轨迹，
+    # 必须在 x0()/u0() 之后停，否则 VO 里 startTime 为空、轨迹丢失
+    .line 4
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->x0()V
+
+    .line 5
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->u0()V
+
+    .line 6
+    invoke-virtual {p0}, Lcom/ledreamer/zz/activity/running/RunningActivity;->i1()V""")
+
+
 # ---------------------------------------------------------------- P11
 def patch_perm_gate():
     """RunningActivity.K() / M()：跑步页的定位权限门禁 -> 恒真。
@@ -392,6 +454,8 @@ def main():
             ('RunningActivity.initData captureExtras', RUN_ACT, 'captureIntentExtras'),
             ('RunningActivity.K 权限门禁恒真', RUN_ACT, 'HF_NOPERM_K'),
             ('RunningActivity.M 后台定位门禁恒真', RUN_ACT, 'HF_NOPERM_M'),
+            ('RunningActivity.S 停服务后置', RUN_ACT, 'HF_STOPLAST'),
+            ('RunningActivity.F0 自动跑跳过', RUN_ACT, 'HF_AUTOFIN'),
             ('NativeProbe', PROBE, None),
         ]
         for name, path, marker in pairs:
@@ -410,6 +474,8 @@ def main():
     ok &= patch_permission()
     ok &= patch_capture_extras()
     ok &= patch_perm_gate()
+    ok &= patch_stop_order()
+    ok &= patch_auto_finish_guard()
     ok &= patch_probe()
 
     print('')

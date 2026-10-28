@@ -60,6 +60,21 @@ public class HfAutoRun {
         armed = false;
     }
 
+    /** armed 持久化：进程被杀后重建跑步页时还能继续收尾 */
+    private static void persistArmed(Context c, boolean v) {
+        try {
+            prefs(c).edit().putBoolean("armed", v).apply();
+        } catch (Throwable ignore) { }
+    }
+
+    private static boolean persistedArmed(Context c) {
+        try {
+            return prefs(c).getBoolean("armed", false);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     public static boolean isArmed() {
         return armed;
     }
@@ -268,9 +283,14 @@ public class HfAutoRun {
     public static boolean startRun(Context c) {
         Intent it = buildRunIntent(c);
         if (it == null) return false;
+        if (runningActivity.get() != null) {
+            HfLog.w(TAG, "已有跑步页在运行，跳过重复启动");
+            return false;
+        }
         try {
             finishTriggered = false;
             armed = true;
+            persistArmed(c, true);
             ensureAppUserInfo(c);          // 否则上传会因 d()==null 被静默拒绝
             c.getApplicationContext().startActivity(it);
             HfLog.i(TAG, "startRun ok (armed)");
@@ -295,6 +315,10 @@ public class HfAutoRun {
                     if (isRunningActivity(a)) {
                         runningActivity = new WeakReference<Activity>(a);
                         finishTriggered = false;
+                        if (!armed && persistedArmed(a)) {
+                            armed = true;   // 进程重启后重建，仍要继续收尾
+                            HfLog.i(TAG, "re-armed from persisted flag");
+                        }
                         HfLog.i(TAG, "tracking run activity");
                     }
                 }
@@ -407,23 +431,34 @@ public class HfAutoRun {
         if (km < 0 || km < target) return false;
         finishTriggered = true;
         HfLog.i(TAG, "target reached: " + km + " km >= " + target + " km, finishing");
+        // 已经结束过（手动点了结束）就别再来一次，否则会重复上传
+        try {
+            Object over = a.getClass().getField("u").get(a);   // u = isOver
+            if (Boolean.TRUE.equals(over)) {
+                HfLog.i(TAG, "run already over, skip finish");
+                armed = false;
+                persistArmed(c, false);
+                return false;
+            }
+        } catch (Throwable ignore) { }
         ensureAppUserInfo(c);              // 收尾前再确认一次，防止中途被清
         try {
             a.getClass().getMethod("S").invoke(a);   // public final void S()
             HfLog.i(TAG, "S() invoked");
             // 诊断：S() 之后 VO 有没有真的构建出来（null 就说明收尾链路被跳过）
             try {
-                Object vo = a.getClass().getField("uploadRunInfoReqVo").get(a);
+                Object vo = a.getClass().getField("M").get(a);   // M = uploadRunInfoReqVo
                 HfLog.i(TAG, "uploadVo = " + (vo == null ? "NULL(!)" : "built"));
                 if (vo == null) {
                     HfLog.e(TAG, "上传数据没构建出来：检查 userInfo / serRuleCondition 是否缺失");
                 }
             } catch (Throwable t) {
-                HfLog.w(TAG, "读取 uploadRunInfoReqVo 失败: " + t);
+                HfLog.w(TAG, "读取 uploadRunInfoReqVo(M) 失败: " + t);
             }
             setLastRunDate(c, new java.text.SimpleDateFormat("yyyy-MM-dd",
                     java.util.Locale.US).format(new java.util.Date()));
             armed = false;
+            persistArmed(c, false);
             return true;
         } catch (Throwable t) {
             HfLog.e(TAG, "invoke S() failed: " + t, t);
